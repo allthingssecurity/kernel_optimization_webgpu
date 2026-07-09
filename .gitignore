@@ -1,0 +1,11 @@
+node_modules/
+dist/
+
+# Model artifacts. Regenerate with:
+#   npm run fetch:qwen && npm run extract:qwen:runtime
+# embed_tokens.f16 alone is 297 MB; GitHub blocks files over 100 MB.
+.cache/
+public/qwen/
+
+.DS_Store
+*.log

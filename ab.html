@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Qwen3 WebGPU — original vs optimized kernels</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <style>
+      body { font-family: ui-sans-serif, system-ui, sans-serif; max-width: 860px; margin: 2rem auto; padding: 0 1rem; line-height: 1.5; }
+      .row { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; margin: .75rem 0; }
+      input[type=text] { flex: 1; min-width: 320px; padding: .5rem; font: inherit; }
+      input[type=number] { width: 5rem; padding: .5rem; font: inherit; }
+      button { padding: .55rem 1.1rem; font: inherit; cursor: pointer; }
+      button:disabled { opacity: .5; cursor: default; }
+      #status { font-family: ui-monospace, monospace; font-size: .85rem; color: #666; min-height: 1.4em; }
+      table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+      th, td { border: 1px solid #ccc; padding: .5rem .6rem; text-align: left; font-size: .92rem; }
+      th { background: #f4f4f4; }
+      td.num { text-align: right; font-family: ui-monospace, monospace; }
+      .out { font-family: ui-monospace, monospace; font-size: .85rem; white-space: pre-wrap; background: #f7f7f7; padding: .5rem; border-radius: 4px; }
+      .warn { background: #fff6e0; border: 1px solid #e8c86a; padding: .6rem .8rem; border-radius: 4px; font-size: .9rem; }
+      .ok { color: #0a7d28; font-weight: 600; }
+      .bad { color: #b00; font-weight: 600; }
+      button.primary { background: #1a6ed8; color: #fff; border: 1px solid #1a6ed8; border-radius: 4px; }
+      .live-panel { margin: .9rem 0; }
+      .live-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: .3rem; }
+      .rate { font-family: ui-monospace, monospace; font-size: 1.05rem; font-weight: 700; color: #1a6ed8; }
+      .live-panel .out { min-height: 2.4em; }
+      @media (prefers-color-scheme: dark) {
+        body { background: #111; color: #eee; }
+        th { background: #222; } th, td { border-color: #444; }
+        .out { background: #1a1a1a; } .warn { background: #2a2410; border-color: #6a5a20; }
+        #status { color: #999; }
+        .rate { color: #6aa9f0; }
+        button.primary { background: #1a6ed8; border-color: #1a6ed8; }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Qwen3-0.6B WebGPU: original vs optimized kernels</h1>
+    <p>
+      Runs the same custom WebGPU decode stack on one prompt with different kernels and
+      compares tokens/sec. Every variant runs entirely on the GPU with the embedding table
+      resident, and all must emit identical token ids.
+    </p>
+
+    <div class="warn">
+      Three kernel sets:
+      <ul style="margin:.4rem 0 .4rem 1.1rem; padding:0">
+        <li><strong>original kernels</strong> — block-parallel q4 matvec; LM head reading f32 weights
+          across 75 submit/readback round-trips with the argmax scanned on the CPU.</li>
+        <li><strong>original LM head + optimized q4</strong> — isolates the matvec's contribution.</li>
+        <li><strong>optimized kernels</strong> — word-parallel q4 matvec; resident f16 LM head with a
+          two-stage GPU argmax returning 8 bytes per token.</li>
+      </ul>
+      <strong>Run A/B</strong> compares original against optimized. <strong>Run all three</strong> adds the
+      mixed variant so you can attribute the speedup to each rewrite.
+      <br />
+      This is a base model with no chat template, so it <em>continues</em> your text rather than
+      answering it. "write a poem" continues as "write a poem about…".
+    </div>
+
+    <div class="row">
+      <input id="prompt" type="text" value="What is the capital of France?" />
+    </div>
+    <div class="row">
+      <label>new tokens <input id="tokens" type="number" value="64" min="1" max="200" /></label>
+      <button id="runOpt" class="primary">Run optimized</button>
+      <button id="runGpu">Run A/B</button>
+      <button id="run">Run all three</button>
+    </div>
+    <div id="status">idle</div>
+    <div id="live"></div>
+    <div id="results"></div>
+
+    <script type="module" src="/src/bench/ab-page.js"></script>
+  </body>
+</html>

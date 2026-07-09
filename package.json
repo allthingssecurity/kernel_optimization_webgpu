@@ -1,0 +1,22 @@
+{
+  "name": "qwen-webgpu-kernels",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "start": "vite --host 127.0.0.1",
+    "check": "node --check src/app.js && node --check src/bench/webgpu-runtime.js && node --check src/bench/real-model-runner.js && node --check scripts/fetch-qwen-artifacts.mjs && node --check scripts/inspect-qwen-onnx.mjs && node --check scripts/extract-qwen-projection.mjs && node --check scripts/extract-qwen-runtime-assets.mjs",
+    "fetch:qwen": "node scripts/fetch-qwen-artifacts.mjs",
+    "inspect:qwen": "node scripts/inspect-qwen-onnx.mjs",
+    "extract:qwen:projection": "node scripts/extract-qwen-projection.mjs",
+    "extract:qwen:runtime": "node scripts/extract-qwen-runtime-assets.mjs"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.2.0",
+    "onnx-proto": "^8.0.1"
+  }
+}

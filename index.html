@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Qwen3 0.6B WebGPU Kernels</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">WebGPU kernel target</p>
+          <h1>Qwen3 0.6B browser decode path</h1>
+          <p class="lede">
+            Weight-only q8 matvec and normalization kernels shaped for Qwen's
+            grouped-query decoder on laptop and mobile GPUs.
+          </p>
+          <div class="actions">
+            <button id="runBench" class="primary">Run WebGPU bench</button>
+            <button id="copyProfile" class="secondary">Copy model profile</button>
+          </div>
+        </div>
+        <div class="pipeline" aria-label="Qwen WebGPU kernel pipeline">
+          <div class="stage active">
+            <span>01</span>
+            <strong>RMSNorm</strong>
+            <small>one workgroup per token</small>
+          </div>
+          <div class="stage active">
+            <span>02</span>
+            <strong>Q4 matvec</strong>
+            <small>packed 4 int8 weights/u32</small>
+          </div>
+          <div class="stage">
+            <span>03</span>
+            <strong>GQA cache</strong>
+            <small>8 KV heads</small>
+          </div>
+          <div class="stage">
+            <span>04</span>
+            <strong>Sampler</strong>
+            <small>CPU or fused GPU path</small>
+          </div>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <h2>Model Shape</h2>
+          <dl id="modelShape" class="shape-list"></dl>
+        </article>
+        <article class="panel wide">
+          <h2>Benchmark Results</h2>
+          <div id="status" class="status">WebGPU has not run yet.</div>
+          <div class="metrics">
+            <div>
+              <span id="baselineMs">-</span>
+              <small>default q8 WebGPU ms</small>
+            </div>
+            <div>
+              <span id="optimizedMs">-</span>
+              <small>optimized q8 WebGPU ms</small>
+            </div>
+            <div>
+              <span id="speedup">-</span>
+              <small>matvec speedup</small>
+            </div>
+          </div>
+          <div class="comparison">
+            <div>
+              <strong id="memoryReduction">-</strong>
+              <span>max abs error vs CPU</span>
+            </div>
+            <div>
+              <strong id="rmsMs">-</strong>
+              <span>RMSNorm ms</span>
+            </div>
+            <div>
+              <strong id="bandwidth">-</strong>
+              <span>optimized q8 estimated GB/s</span>
+            </div>
+          </div>
+          <div class="comparison block-results">
+            <div>
+              <strong id="blockDefaultMs">-</strong>
+              <span>default MLP block ms</span>
+            </div>
+            <div>
+              <strong id="blockOptimizedMs">-</strong>
+              <span>optimized MLP block ms</span>
+            </div>
+            <div>
+              <strong id="blockSpeedup">-</strong>
+              <span>wired runtime speedup</span>
+            </div>
+          </div>
+          <div class="comparison block-results">
+            <div>
+              <strong id="blockError">-</strong>
+              <span>MLP max abs error vs CPU</span>
+            </div>
+            <div>
+              <strong>RMSNorm</strong>
+              <span>included in wired block</span>
+            </div>
+            <div>
+              <strong>SiLU</strong>
+              <span>included in wired block</span>
+            </div>
+          </div>
+          <div class="comparison block-results">
+            <div>
+              <strong id="realQ4Ms">-</strong>
+              <span>real Qwen layer0 gate q4 ms</span>
+            </div>
+            <div>
+              <strong id="realQ4Error">-</strong>
+              <span>real q4 max abs error vs CPU</span>
+            </div>
+            <div>
+              <strong>MatMulNBits</strong>
+              <span>uses extracted ONNX weights</span>
+            </div>
+          </div>
+          <div class="comparison block-results">
+            <div>
+              <strong id="gqaMs">-</strong>
+              <span>GQA decode ms</span>
+            </div>
+            <div>
+              <strong id="gqaError">-</strong>
+              <span>GQA max abs error vs CPU</span>
+            </div>
+            <div>
+              <strong id="gqaSeqLen">-</strong>
+              <span>KV cache sequence length</span>
+            </div>
+          </div>
+          <div class="comparison block-results">
+            <div>
+              <strong id="layer0DecodeMs">-</strong>
+              <span>real Qwen layer0 decode block ms</span>
+            </div>
+            <div>
+              <strong id="layer0Finite">-</strong>
+              <span>finite output values</span>
+            </div>
+            <div>
+              <strong id="layer0MeanAbs">-</strong>
+              <span>mean abs output</span>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="details">
+        <h2>Kernel Plan</h2>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Hot path</th>
+                <th>WebGPU kernel</th>
+                <th>Qwen-specific choice</th>
+              </tr>
+            </thead>
+            <tbody id="kernelPlan"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="details">
+        <h2>Full Prompt Coverage</h2>
+        <div class="status">
+          Optimized prompt generation is disabled until every required component is covered
+          with real Qwen weights and custom WebGPU execution.
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Component</th>
+                <th>Status</th>
+                <th>Why it matters</th>
+              </tr>
+            </thead>
+            <tbody id="promptCoverage"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="real-model">
+        <div class="real-header">
+          <div>
+            <p class="eyebrow">Real model test</p>
+            <h2>Prompt Qwen3 0.6B through WebGPU</h2>
+          </div>
+          <div class="real-actions">
+            <button id="runBefore" class="secondary">Run default WebGPU</button>
+            <button id="runAfter" class="secondary">Run optimized WebGPU</button>
+            <button id="runCompare" class="primary">Run available path</button>
+            <button id="runDecoderStack" class="secondary">Run custom decoder stack</button>
+          </div>
+        </div>
+        <label class="prompt-box">
+          <span>Prompt</span>
+          <textarea id="promptInput" rows="5">Explain why WebGPU quantization helps browser LLM inference in exactly three concise bullets.</textarea>
+        </label>
+        <label class="prompt-box compact">
+          <span>System</span>
+          <textarea id="systemInput" rows="3">You are a concise technical assistant. Answer only the user request. Do not repeat the prompt.</textarea>
+        </label>
+        <label class="token-control">
+          <span>Max new tokens</span>
+          <input id="maxTokens" type="number" min="8" max="256" step="8" value="64" />
+        </label>
+        <div id="realStatus" class="status">Real model has not run yet. First load downloads Qwen ONNX weights.</div>
+
+        <div class="real-summary">
+          <div>
+            <strong id="realSpeedup">-</strong>
+            <span>optimized vs default speed</span>
+          </div>
+          <div>
+            <strong id="realTtft">-</strong>
+            <span>optimized vs default TTFT</span>
+          </div>
+        </div>
+
+        <div class="real-summary">
+          <div>
+            <strong id="decoderStackMs">-</strong>
+            <span>custom 28-layer decoder plus final norm</span>
+          </div>
+          <div>
+            <strong id="decoderStackWarmup">-</strong>
+            <span>warmup dispatch</span>
+          </div>
+          <div>
+            <strong id="decoderStackFinite">-</strong>
+            <span>finite hidden values</span>
+          </div>
+          <div>
+            <strong id="decoderStackMeanAbs">-</strong>
+            <span>mean abs hidden</span>
+          </div>
+        </div>
+
+        <div class="result-grid">
+          <article class="result-card">
+            <h3>Default: q4f16 WebGPU</h3>
+            <dl>
+              <div><dt>dtype</dt><dd data-result="before-dtype">q4f16</dd></div>
+              <div><dt>device</dt><dd data-result="before-device">webgpu</dd></div>
+              <div><dt>load</dt><dd data-result="before-load">-</dd></div>
+              <div><dt>TTFT</dt><dd data-result="before-ttft">-</dd></div>
+              <div><dt>generate</dt><dd data-result="before-gen">-</dd></div>
+              <div><dt>speed</dt><dd data-result="before-speed">-</dd></div>
+              <div><dt>tokens</dt><dd data-result="before-tokens">-</dd></div>
+              <div><dt>output</dt><dd data-result="before-validity">-</dd></div>
+            </dl>
+            <pre id="beforeOutput"></pre>
+          </article>
+          <article class="result-card">
+            <h3>Optimized: custom q4f16 WebGPU</h3>
+            <dl>
+              <div><dt>dtype</dt><dd data-result="after-dtype">q4f16</dd></div>
+              <div><dt>device</dt><dd data-result="after-device">custom-webgpu</dd></div>
+              <div><dt>load</dt><dd data-result="after-load">-</dd></div>
+              <div><dt>TTFT</dt><dd data-result="after-ttft">-</dd></div>
+              <div><dt>generate</dt><dd data-result="after-gen">-</dd></div>
+              <div><dt>speed</dt><dd data-result="after-speed">-</dd></div>
+              <div><dt>tokens</dt><dd data-result="after-tokens">-</dd></div>
+              <div><dt>output</dt><dd data-result="after-validity">-</dd></div>
+            </dl>
+            <pre id="afterOutput"></pre>
+          </article>
+        </div>
+      </section>
+    </main>
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>
